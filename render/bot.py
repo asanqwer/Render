@@ -6,26 +6,28 @@ import pytz
 import threading
 from telegram import Bot
 from telegram.ext import Updater, CommandHandler
-from apscheduler.schedulers.blocking import BlockingScheduler
+from apscheduler.schedulers.background import BackgroundScheduler
 from dotenv import load_dotenv
+from flask import Flask
 
-# Load environment variables from .env
+# Load environment variables
 load_dotenv()
 
-# Trigger invitation registration link
+# === Step 1: Trigger registration link once ===
 def open_registration_link():
     try:
         url = "https://www.18sikkim.com/#/register?invitationCode=643745098970"
         headers = {"User-Agent": "Mozilla/5.0"}
         requests.get(url, headers=headers)
-        print("Registration link opened.")
+        print("✅ Registration link triggered.")
     except Exception as e:
-        print(f"Failed to open link: {e}")
+        print(f"⚠️ Failed to open registration link: {e}")
 
 open_registration_link()
 
+# === Step 2: Bot config ===
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-GROUP_CHAT_ID = "-1002519195018"
+GROUP_CHAT_ID = "-1002519195018"  # Replace with your Telegram group ID
 bot = Bot(token=BOT_TOKEN)
 
 stickers = [
@@ -35,12 +37,13 @@ stickers = [
     "CAACAgIAAxkBAAKmkGf5EDBgwnSDovUPpQGsTjMQdU69AAL4DAACNyx5S6FYW3VBcuj4NgQ"
 ]
 
+# === Step 3: Prediction logic ===
 def get_latest_period():
     url = "https://api.51gameapi.com/api/webapi/GetNoaverageEmerdList"
     headers = {
         "Content-Type": "application/json;charset=UTF-8",
         "Accept": "application/json",
-        "Authorization": "Bearer YOUR_TOKEN_HERE"
+        "Authorization": "Bearer YOUR_TOKEN_HERE"  # Replace with valid token if needed
     }
     payload = {
         "pageSize": 10,
@@ -55,7 +58,8 @@ def get_latest_period():
         response = requests.post(url, headers=headers, data=json.dumps(payload))
         data = response.json()
         return int(data["data"]["list"][0]["issueNumber"]) + 1
-    except:
+    except Exception as e:
+        print(f"⚠️ API error: {e}")
         return None
 
 def get_random_prediction():
@@ -64,7 +68,7 @@ def get_random_prediction():
 def send_prediction():
     period = get_latest_period()
     if not period:
-        print("Error fetching period.")
+        print("❌ Could not fetch period.")
         return
 
     prediction = get_random_prediction()
@@ -74,24 +78,31 @@ def send_prediction():
     if random.random() < 0.5:
         bot.send_sticker(chat_id=GROUP_CHAT_ID, sticker=random.choice(stickers))
 
-    print(f"Sent: {message}")
+    print(f"✅ Sent: {message}")
 
-# Scheduler
-def start_scheduler():
-    scheduler = BlockingScheduler(timezone=pytz.utc)
-    scheduler.add_job(send_prediction, 'interval', minutes=1)
-    scheduler.start()
+# === Step 4: Scheduler (runs in background) ===
+scheduler = BackgroundScheduler(timezone=pytz.utc)
+scheduler.add_job(send_prediction, 'interval', minutes=1)
+scheduler.start()
 
-# Telegram bot command
+# === Step 5: Telegram Bot Handlers ===
 def start(update, context):
-    context.bot.send_message(chat_id=update.effective_chat.id, text="Running ✅")
+    context.bot.send_message(chat_id=update.effective_chat.id, text="🤖 Bot is running!")
 
 updater = Updater(token=BOT_TOKEN, use_context=True)
 dispatcher = updater.dispatcher
 dispatcher.add_handler(CommandHandler('start', start))
 
-# Run scheduler in background
-threading.Thread(target=start_scheduler).start()
+# Start bot polling in a thread so Flask can run too
+threading.Thread(target=updater.start_polling).start()
 
-# Start bot polling
-updater.start_polling()
+# === Step 6: Flask web server to keep Render alive ===
+web_app = Flask(__name__)
+
+@web_app.route('/')
+def home():
+    return "🚀 Telegram bot is running on Render!"
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 10000))
+    web_app.run(host="0.0.0.0", port=port)
