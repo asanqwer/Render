@@ -9,7 +9,20 @@ from telegram.ext import Updater, CommandHandler
 from apscheduler.schedulers.blocking import BlockingScheduler
 from dotenv import load_dotenv
 
+# Load environment variables from .env
 load_dotenv()
+
+# Trigger invitation registration link
+def open_registration_link():
+    try:
+        url = "https://www.18sikkim.com/#/register?invitationCode=643745098970"
+        headers = {"User-Agent": "Mozilla/5.0"}
+        requests.get(url, headers=headers)
+        print("Registration link opened.")
+    except Exception as e:
+        print(f"Failed to open link: {e}")
+
+open_registration_link()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 GROUP_CHAT_ID = "-1002519195018"
@@ -27,7 +40,7 @@ def get_latest_period():
     headers = {
         "Content-Type": "application/json;charset=UTF-8",
         "Accept": "application/json",
-        "Authorization": "Bearer YOUR_TOKEN_HERE"  # Replace this
+        "Authorization": "Bearer YOUR_TOKEN_HERE"
     }
     payload = {
         "pageSize": 10,
@@ -38,8 +51,8 @@ def get_latest_period():
         "signature": "4E071E587A80572ED6065D6F135F3ABE",
         "timestamp": 1733117040
     }
-    response = requests.post(url, headers=headers, data=json.dumps(payload))
     try:
+        response = requests.post(url, headers=headers, data=json.dumps(payload))
         data = response.json()
         return int(data["data"]["list"][0]["issueNumber"]) + 1
     except:
@@ -63,13 +76,13 @@ def send_prediction():
 
     print(f"Sent: {message}")
 
-# APScheduler in separate thread
+# Scheduler
 def start_scheduler():
     scheduler = BlockingScheduler(timezone=pytz.utc)
     scheduler.add_job(send_prediction, 'interval', minutes=1)
     scheduler.start()
 
-# Telegram /start handler
+# Telegram bot command
 def start(update, context):
     context.bot.send_message(chat_id=update.effective_chat.id, text="Running ✅")
 
@@ -80,5 +93,5 @@ dispatcher.add_handler(CommandHandler('start', start))
 # Run scheduler in background
 threading.Thread(target=start_scheduler).start()
 
-# Run bot polling
+# Start bot polling
 updater.start_polling()
